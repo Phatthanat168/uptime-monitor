@@ -22,58 +22,23 @@ jobs:
 
           echo "Status: $STATUS"
 
-          # โหลดสถานะก่อนหน้า (ถ้ามี)
-          if [ -f status.txt ]; then
-            PREV_STATUS=$(cat status.txt)
+          # 🚨 แจ้งทันทีถ้าไม่ใช่ 200
+          if [ "$STATUS" != "200" ]; then
+
+            echo "Send alert"
+
+            curl -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "{
+              \"to\": \"$GROUP_ID\",
+              \"messages\": [
+                {
+                  \"type\": \"text\",
+                  \"text\": \"🚨 WEBSITE ERROR!\n$URL\nStatus: $STATUS\"
+                }
+              ]
+            }"
           else
-            PREV_STATUS="unknown"
+            echo "OK"
           fi
-
-          echo "Previous: $PREV_STATUS"
-
-          # เขียนสถานะใหม่
-          echo "$STATUS" > status.txt
-
-          # 🚨 แจ้งตอน "ล่ม"
-          if { [ "$STATUS" = "000" ] || [ "$STATUS" -ge 500 ]; } && { [ "$PREV_STATUS" != "down" ]; }; then
-
-            echo "Send DOWN alert"
-
-            curl -X POST https://api.line.me/v2/bot/message/push \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d "{
-              \"to\": \"$GROUP_ID\",
-              \"messages\": [
-                {
-                  \"type\": \"text\",
-                  \"text\": \"🚨 WEBSITE DOWN!\n$URL\nStatus: $STATUS\"
-                }
-              ]
-            }"
-
-            echo "down" > status.txt
-          fi
-
-          # ✅ แจ้งตอน "กลับมา"
-          if { [ "$STATUS" = "200" ]; } && { [ "$PREV_STATUS" = "down" ]; }; then
-
-            echo "Send RECOVER alert"
-
-            curl -X POST https://api.line.me/v2/bot/message/push \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d "{
-              \"to\": \"$GROUP_ID\",
-              \"messages\": [
-                {
-                  \"type\": \"text\",
-                  \"text\": \"✅ WEBSITE RECOVERED!\n$URL\"
-                }
-              ]
-            }"
-
-            echo "up" > status.txt
-          fi
-
-          echo "Done"
