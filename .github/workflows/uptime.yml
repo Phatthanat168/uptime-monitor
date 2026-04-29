@@ -24,11 +24,9 @@ jobs:
           echo "📅 Time: $(date)"
           echo "=================================="
           
-          # ตรวจสอบ website
           HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" "$URL" --max-time 10 --connect-timeout 5)
           echo "📊 HTTP Status: $HTTP_CODE"
           
-          # อ่านสถานะเดิม
           if [ -f status.txt ]; then
             OLD_STATUS=$(cat status.txt)
           else
@@ -36,7 +34,6 @@ jobs:
           fi
           echo "💾 Previous: $OLD_STATUS"
           
-          # ฟังก์ชันส่ง LINE
           send_line() {
             local msg="$1"
             curl -s -X POST https://api.line.me/v2/bot/message/push \
@@ -45,10 +42,7 @@ jobs:
               -d "{\"to\":\"$GROUP_ID\",\"messages\":[{\"type\":\"text\",\"text\":\"$msg\"}]}"
           }
           
-          # ============================================
-          # 🚨 DOWN (status ไม่ใช่ 200 เท่านั้น)
-          # รวม 404, 500, 502, 503, 530 ทั้งหมด
-          # ============================================
+          # DOWN (ทุก status ที่ไม่ใช่200)
           if [ "$HTTP_CODE" != "200" ]; then
             if [ "$OLD_STATUS" != "down" ]; then
               echo "🚨 SENDING DOWN ALERT..."
@@ -57,10 +51,6 @@ jobs:
             else
               echo "⚠️ Still down (status: $HTTP_CODE) - No repeat alert"
             fi
-          
-          # ============================================
-          # ✅ UP (status 200 เท่านั้น)
-          # ============================================
           else
             if [ "$OLD_STATUS" = "down" ]; then
               echo "✅ SENDING RECOVERY ALERT..."
