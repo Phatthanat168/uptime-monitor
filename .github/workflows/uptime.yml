@@ -2,7 +2,7 @@ name: Website Monitor (LINE Group TH)
 
 on:
   schedule:
-    - cron: '*/1 * * * *'   # ทุก 1 นาที (เพื่อให้ cron ติดง่าย)
+    - cron: '* * * * *'   # ทุก 1 นาที (เพื่อให้ cron ติดง่าย)
   workflow_dispatch:
 
 jobs:
