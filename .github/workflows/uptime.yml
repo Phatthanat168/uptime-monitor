@@ -1,50 +1,63 @@
 name: Website Monitor (LINE Group TH)
-
 on:
   schedule:
     - cron: '*/3 * * * *'
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Restore status cache
+        uses: actions/cache@v4
+        with:
+          path: status.txt
+          key: uptime-status
+          restore-keys: uptime-status
 
       - name: Check Website + LINE Alert
         run: |
           URL="https://patrol.mggintergroup.com/"
           TOKEN="${{ secrets.LINE_TOKEN }}"
           GROUP_ID="Cabc85afaec5c2182c8be2175ff57f226"
-          
+
           echo "Checking: $URL at $(date)"
-          
           HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" "$URL" --max-time 10)
           echo "Status: $HTTP_CODE"
-          
+
           if [ -f status.txt ]; then
             OLD_STATUS=$(cat status.txt)
           else
             OLD_STATUS="unknown"
           fi
-          
+
+          echo "Previous status: $OLD_STATUS"
+
           send_line() {
             curl -s -X POST https://api.line.me/v2/bot/message/push \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $TOKEN" \
               -d "{\"to\":\"$GROUP_ID\",\"messages\":[{\"type\":\"text\",\"text\":\"$1\"}]}"
           }
-          
+
           if [ "$HTTP_CODE" != "200" ]; then
             if [ "$OLD_STATUS" != "down" ]; then
               send_line "🔴 DOWN! $URL - Status: $HTTP_CODE"
-              echo "down" > status.txt
             fi
+            echo "down" > status.txt
           else
             if [ "$OLD_STATUS" = "down" ]; then
               send_line "🟢 RECOVERED! $URL - Status: 200"
-              echo "up" > status.txt
             fi
+            echo "up" > status.txt
           fi
+
+      - name: Save status cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: status.txt
+          key: uptime-status
