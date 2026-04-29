@@ -1,31 +1,79 @@
-name: LINE Group Test
+name: Website Monitor (LINE Group)
 
 on:
+  schedule:
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
-  send-line:
+  monitor:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send message to LINE Group
+      - name: Check Website + Notify LINE
         run: |
+          URL="https://patrol.mggintergroup.com/"
           TOKEN="${{ secrets.LINE_TOKEN }}"
           GROUP_ID="Cabc85afaec5c2182c8be2175ff57f226"
 
-          echo "Sending to group..."
+          echo "Checking: $URL"
 
-          curl -X POST https://api.line.me/v2/bot/message/push \
-          -H "Content-Type: application/json" \
-          -H "Authorization: Bearer $TOKEN" \
-          -d "{
-            \"to\": \"$GROUP_ID\",
-            \"messages\": [
-              {
-                \"type\": \"text\",
-                \"text\": \"🔥 แจ้งเตือนจาก GitHub (เข้ากลุ่มสำเร็จ!)\"
-              }
-            ]
-          }"
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" $URL || echo "000")
 
-          echo "✅ Done"
+          echo "Status: $STATUS"
+
+          # โหลดสถานะก่อนหน้า (ถ้ามี)
+          if [ -f status.txt ]; then
+            PREV_STATUS=$(cat status.txt)
+          else
+            PREV_STATUS="unknown"
+          fi
+
+          echo "Previous: $PREV_STATUS"
+
+          # เขียนสถานะใหม่
+          echo "$STATUS" > status.txt
+
+          # 🚨 แจ้งตอน "ล่ม"
+          if { [ "$STATUS" = "000" ] || [ "$STATUS" -ge 500 ]; } && { [ "$PREV_STATUS" != "down" ]; }; then
+
+            echo "Send DOWN alert"
+
+            curl -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "{
+              \"to\": \"$GROUP_ID\",
+              \"messages\": [
+                {
+                  \"type\": \"text\",
+                  \"text\": \"🚨 WEBSITE DOWN!\n$URL\nStatus: $STATUS\"
+                }
+              ]
+            }"
+
+            echo "down" > status.txt
+          fi
+
+          # ✅ แจ้งตอน "กลับมา"
+          if { [ "$STATUS" = "200" ]; } && { [ "$PREV_STATUS" = "down" ]; }; then
+
+            echo "Send RECOVER alert"
+
+            curl -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "{
+              \"to\": \"$GROUP_ID\",
+              \"messages\": [
+                {
+                  \"type\": \"text\",
+                  \"text\": \"✅ WEBSITE RECOVERED!\n$URL\"
+                }
+              ]
+            }"
+
+            echo "up" > status.txt
+          fi
+
+          echo "Done"
