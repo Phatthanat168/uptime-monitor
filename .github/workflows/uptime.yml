@@ -1,42 +1,19 @@
-name: Website Monitor
+name: LINE Test
 
 on:
+  workflow_dispatch:   # กดรันเอง
   schedule:
-    - cron: '*/5 * * * *'   # ทุก 5 นาที
-  workflow_dispatch:        # กดรันเองได้
+    - cron: '*/5 * * * *'   # ทุก 5 นาที (เอาออกได้ถ้าไม่อยากให้ยิงบ่อย)
 
 jobs:
-  check:
+  test-line:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Website and Notify LINE
+      - name: Send LINE Notification
         run: |
-          URL="https://patrol.mggintergroup.com/"
+          echo "Sending test message to LINE..."
 
-          echo "=============================="
-          echo "Checking: $URL"
-          echo "Time: $(date)"
-          echo "=============================="
-
-          # ยิง request และกัน error
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" $URL || echo "000")
-
-          echo "HTTP Status: $STATUS"
-
-          # debug เพิ่ม (optional แต่แนะนำ)
-          echo "Trying detailed connection..."
-          curl -v $URL || true
-
-          # ถ้าไม่ใช่ 200 = แจ้งเตือน
-          if [ "$STATUS" != "200" ]; then
-            echo "❌ Website DOWN"
-
-            curl -X POST https://notify-api.line.me/api/notify \
-            -H "Authorization: Bearer ${{ secrets.LINE_TOKEN }}" \
-            -F "message=🚨 Website DOWN!
-URL: $URL
-Status: $STATUS"
-          else
-            echo "✅ Website OK"
-          fi
+          curl -X POST https://notify-api.line.me/api/notify \
+          -H "Authorization: Bearer ${{ secrets.LINE_TOKEN }}" \
+          -F "message=✅ TEST: GitHub Actions ส่ง LINE สำเร็จ!"
