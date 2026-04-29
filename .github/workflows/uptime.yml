@@ -1,7 +1,5 @@
 name: Website Monitor (LINE Group TH)
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -9,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Restore status cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: status.txt
           key: uptime-status
@@ -52,7 +50,7 @@ jobs:
           fi
 
       - name: Save status cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: always()
         with:
           path: status.txt
