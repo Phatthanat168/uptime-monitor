@@ -12,7 +12,11 @@ jobs:
     steps:
       - name: Check Website
         run: |
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" https://patrol.mggintergroup.com/)
+          URL="https://patrol.mggintergroup.com/"
+
+          echo "Checking $URL"
+
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" $URL || echo "000")
 
           echo "Status: $STATUS"
 
