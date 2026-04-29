@@ -1,6 +1,10 @@
 name: Website Monitor (LINE Group TH)
+
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '*/10 * * * *'
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
@@ -32,6 +36,7 @@ jobs:
 
           TIME=$(TZ='Asia/Bangkok' date '+%d/%m/%Y %H:%M:%S')
 
+          # Check if website is down (not 200 or 404)
           if [ "$STATUS" != "200" ] && [ "$STATUS" != "404" ] && [ "$PREV" != "down" ]; then
             echo ">>> ตรวจพบเว็บล่ม!"
             curl -s -X POST https://api.line.me/v2/bot/message/push \
@@ -47,23 +52,35 @@ jobs:
               ]
             }"
             echo "down" > status.txt
+            echo "ส่งแจ้งเตือนเว็บล่มแล้ว"
           fi
 
+          # Check if website is back up (200 or 404)
           if { [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; } && { [ "$PREV" = "down" ] || [ "$PREV" = "unknown" ]; }; then
-            echo ">>> เว็บกลับมาแล้ว!"
-            curl -s -X POST https://api.line.me/v2/bot/message/push \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
-            -d "{
-              \"to\": \"$GROUP_ID\",
-              \"messages\": [
-                {
-                  \"type\": \"text\",
-                  \"text\": \"✅ เว็บไซต์กลับมาใช้งานได้แล้ว\n\nเว็บ: $URL\nสถานะ: $STATUS\nเวลา: $TIME (ไทย)\n\nระบบทำงานปกติแล้ว\"
-                }
-              ]
-            }"
+            if [ "$PREV" = "down" ]; then
+              echo ">>> เว็บกลับมาแล้ว!"
+              curl -s -X POST https://api.line.me/v2/bot/message/push \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $TOKEN" \
+              -d "{
+                \"to\": \"$GROUP_ID\",
+                \"messages\": [
+                  {
+                    \"type\": \"text\",
+                    \"text\": \"✅ เว็บไซต์กลับมาใช้งานได้แล้ว\n\nเว็บ: $URL\nสถานะ: $STATUS\nเวลา: $TIME (ไทย)\n\nระบบทำงานปกติแล้ว\"
+                  }
+                ]
+              }"
+              echo "ส่งแจ้งเตือนเว็บกลับมาแล้ว"
+            fi
             echo "up" > status.txt
+          fi
+          
+          # Log current status
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; then
+            echo "เว็บไซต์正常工作 (สถานะ: $STATUS)"
+          else
+            echo "เว็บไซต์มีปัญหา (สถานะ: $STATUS)"
           fi
 
       - name: Save state
@@ -71,5 +88,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add status.txt || true
-          git commit -m "update status" || true
+          git diff --staged --quiet || git commit -m "update status $(date '+%Y-%m-%d %H:%M:%S')"
           git push || true
