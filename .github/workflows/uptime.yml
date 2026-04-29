@@ -2,7 +2,7 @@ name: Website Monitor (LINE Group TH)
 
 on:
   schedule:
-    - cron: '*/3 * * * *'   # ทุก 3 นาที
+    - cron: '*/3 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -19,59 +19,32 @@ jobs:
           TOKEN="${{ secrets.LINE_TOKEN }}"
           GROUP_ID="Cabc85afaec5c2182c8be2175ff57f226"
           
-          echo "=================================="
-          echo "🔍 Checking: $URL"
-          echo "📅 Time: $(date)"
-          echo "=================================="
+          echo "Checking: $URL at $(date)"
           
-          HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" "$URL" --max-time 10 --connect-timeout 5)
-          echo "📊 HTTP Status: $HTTP_CODE"
+          HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" "$URL" --max-time 10)
+          echo "Status: $HTTP_CODE"
           
           if [ -f status.txt ]; then
             OLD_STATUS=$(cat status.txt)
           else
             OLD_STATUS="unknown"
           fi
-          echo "💾 Previous: $OLD_STATUS"
           
           send_line() {
-            local msg="$1"
             curl -s -X POST https://api.line.me/v2/bot/message/push \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $TOKEN" \
-              -d "{\"to\":\"$GROUP_ID\",\"messages\":[{\"type\":\"text\",\"text\":\"$msg\"}]}"
+              -d "{\"to\":\"$GROUP_ID\",\"messages\":[{\"type\":\"text\",\"text\":\"$1\"}]}"
           }
           
-          # DOWN (ทุก status ที่ไม่ใช่200)
           if [ "$HTTP_CODE" != "200" ]; then
             if [ "$OLD_STATUS" != "down" ]; then
-              echo "🚨 SENDING DOWN ALERT..."
-              send_line "🔴 WEBSITE DOWN! 🔴%0A%0AURL: $URL%0AStatus: $HTTP_CODE%0ATime: $(date '+%Y-%m-%d %H:%M:%S')%0A%0A⚠️ Please check immediately!"
+              send_line "🔴 DOWN! $URL - Status: $HTTP_CODE"
               echo "down" > status.txt
-            else
-              echo "⚠️ Still down (status: $HTTP_CODE) - No repeat alert"
             fi
           else
             if [ "$OLD_STATUS" = "down" ]; then
-              echo "✅ SENDING RECOVERY ALERT..."
-              send_line "🟢 WEBSITE RECOVERED! 🟢%0A%0AURL: $URL%0AStatus: 200 OK%0ATime: $(date '+%Y-%m-%d %H:%M:%S')%0A%0A✅ Website is back to normal."
+              send_line "🟢 RECOVERED! $URL - Status: 200"
               echo "up" > status.txt
-            else
-              echo "✅ Website normal (status: $HTTP_CODE)"
-              if [ "$OLD_STATUS" != "up" ]; then
-                echo "up" > status.txt
-              fi
             fi
           fi
-          
-          echo "=================================="
-          echo "✅ Check completed"
-          echo "=================================="
-
-      - name: Save status
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add status.txt 2>/dev/null || true
-          git commit -m "📊 Update website status [skip ci]" 2>/dev/null || echo "No changes to commit"
-          git push 2>/dev/null || echo "Nothing to push"
