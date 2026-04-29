@@ -1,10 +1,7 @@
 name: Website Monitor (LINE Group TH)
 on:
   schedule:
-    - cron: '*/3 * * * *'
-  push:
-    branches:
-      - main
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -33,7 +30,6 @@ jobs:
           else
             OLD_STATUS="unknown"
           fi
-
           echo "Previous status: $OLD_STATUS"
 
           send_line() {
