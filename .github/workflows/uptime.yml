@@ -2,120 +2,85 @@ name: Website Monitor (LINE Group TH)
 
 on:
   schedule:
-    - cron: '* * * * *'   # ทุก 5 นาที (ลดการ consume API)
-  workflow_dispatch:         # รัน manual ได้
-  push:                      # เมื่อมี push ใหม่ (ช่วยปลุก auto)
-    branches: [ main, master ]
+    - cron: '*/3 * * * *'   # ทุก 3 นาที
+  workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write        # ให้ push กลับไปได้
-
+    
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0      # ดึง history ทั้งหมด
 
-      - name: Check Website + Notify LINE
-        env:
-          TOKEN: ${{ secrets.LINE_TOKEN }}
-          GROUP_ID: "Cabc85afaec5c2182c8be2175ff57f226"
-          URL: "https://patrol.mggintergroup.com/"
+      - name: Check Website + LINE Alert
         run: |
-          echo "=========================="
-          echo "Checking: $URL"
-          echo "Time: $(date)"
-          echo "=========================="
-
-          # ดึง HTTP status code (รองรับ timeout)
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$URL" --max-time 10 --connect-timeout 5 || echo "000")
-          echo "Status: $STATUS"
-
-          # โหลดสถานะก่อนหน้า
+          URL="https://patrol.mggintergroup.com/"
+          TOKEN="${{ secrets.LINE_TOKEN }}"
+          GROUP_ID="Cabc85afaec5c2182c8be2175ff57f226"
+          
+          echo "=================================="
+          echo "🔍 Checking: $URL"
+          echo "📅 Time: $(date)"
+          echo "=================================="
+          
+          # ตรวจสอบ website
+          HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" "$URL" --max-time 10 --connect-timeout 5)
+          echo "📊 HTTP Status: $HTTP_CODE"
+          
+          # อ่านสถานะเดิม
           if [ -f status.txt ]; then
-            PREV=$(cat status.txt)
+            OLD_STATUS=$(cat status.txt)
           else
-            PREV="unknown"
+            OLD_STATUS="unknown"
           fi
-          echo "Previous: $PREV"
-
-          # ฟังก์ชันส่งข้อความ (Messaging API)
-          send_line_message() {
-            local message="$1"
+          echo "💾 Previous: $OLD_STATUS"
+          
+          # ฟังก์ชันส่ง LINE
+          send_line() {
+            local msg="$1"
             curl -s -X POST https://api.line.me/v2/bot/message/push \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $TOKEN" \
-              -d "{
-                \"to\": \"$GROUP_ID\",
-                \"messages\": [
-                  {
-                    \"type\": \"text\",
-                    \"text\": \"$message\"
-                  }
-                ]
-              }"
+              -d "{\"to\":\"$GROUP_ID\",\"messages\":[{\"type\":\"text\",\"text\":\"$msg\"}]}"
           }
-
-          # =========================
-          # 🚨 DOWN (status ไม่ใช่ 200/404)
-          # =========================
-          if [[ "$STATUS" != "200" && "$STATUS" != "404" && "$PREV" != "down" ]]; then
-            echo "🚨 DOWN detected - Sending alert..."
-            
-            MESSAGE="🚨 WEBSITE DOWN! 🚨
-            
-URL: $URL
-Status: $HTTP_STATUS
-Time: $(date '+%Y-%m-%d %H:%M:%S')
-
-Please check immediately!"
-            
-            send_line_message "$MESSAGE"
-            echo "down" > status.txt
-            echo "Alert sent"
-          fi
-
-          # =========================
-          # ✅ RECOVER (กลับมา online)
-          # =========================
-          if [[ "$STATUS" == "200" || "$STATUS" == "404" ]] && [[ "$PREV" == "down" || "$PREV" == "unknown" ]]; then
-            echo "✅ RECOVER detected - Sending notification..."
-            
-            MESSAGE="✅ WEBSITE ONLINE ✅
-            
-URL: $URL
-Status: $STATUS
-Time: $(date '+%Y-%m-%d %H:%M:%S')
-
-Website is back to normal."
-            
-            send_line_message "$MESSAGE"
-            echo "up" > status.txt
-            echo "Recovery notification sent"
-          fi
           
-          # กรณี status ปกติ (200/404) และก่อนหน้าก็ปกติ
-          if [[ "$STATUS" == "200" || "$STATUS" == "404" ]] && [[ "$PREV" == "up" || "$PREV" == "unknown" ]]; then
-            echo "✅ Website is normal (status: $STATUS)"
-            if [ ! -f status.txt ] || [ "$PREV" != "up" ]; then
+          # ============================================
+          # กรณี DOWN (status ไม่ใช่ 200 และไม่ใช่ 404)
+          # ============================================
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "404" ]; then
+            if [ "$OLD_STATUS" != "down" ]; then
+              echo "🚨 SENDING DOWN ALERT..."
+              send_line "🔴 WEBSITE DOWN! 🔴%0A%0AURL: $URL%0AStatus: $HTTP_CODE%0ATime: $(date '+%Y-%m-%d %H:%M:%S')%0A%0A⚠️ Please check immediately!"
+              echo "down" > status.txt
+            else
+              echo "⚠️ Still down (status: $HTTP_CODE) - No repeat alert"
+            fi
+          
+          # ============================================
+          # กรณี UP (status 200 หรือ 404)
+          # ============================================
+          else
+            if [ "$OLD_STATUS" = "down" ]; then
+              echo "✅ SENDING RECOVERY ALERT..."
+              send_line "🟢 WEBSITE RECOVERED! 🟢%0A%0AURL: $URL%0AStatus: $HTTP_CODE%0ATime: $(date '+%Y-%m-%d %H:%M:%S')%0A%0A✅ Website is back to normal."
               echo "up" > status.txt
+            else
+              echo "✅ Website normal (status: $HTTP_CODE)"
+              if [ "$OLD_STATUS" != "up" ]; then
+                echo "up" > status.txt
+              fi
             fi
           fi
+          
+          echo "=================================="
+          echo "✅ Check completed"
+          echo "=================================="
 
-      - name: Commit and push status
+      - name: Save status
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Pull latest changes เพื่อ避免 conflict
-          git pull origin main --rebase || true
-          
-          # commit เฉพาะเมื่อมี change
-          if [ -f status.txt ]; then
-            git add status.txt
-            git diff --staged --quiet || git commit -m "Update website status [skip ci]"
-            git push || true
-          fi
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add status.txt 2>/dev/null || true
+          git commit -m "📊 Update website status [skip ci]" 2>/dev/null || echo "No changes to commit"
+          git push 2>/dev/null || echo "Nothing to push"
