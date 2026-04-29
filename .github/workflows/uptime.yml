@@ -1,4 +1,4 @@
-name: LINE Bot Test
+name: LINE Group Test
 
 on:
   workflow_dispatch:
@@ -8,24 +8,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send message to LINE
+      - name: Send message to LINE Group
         run: |
           TOKEN="${{ secrets.LINE_TOKEN }}"
-          USER_ID="U7a45281dfbd27d2caa942c62f29be03e"
+          GROUP_ID="Cabc85afaec5c2182c8be2175ff57f226"
 
-          echo "Sending..."
+          echo "Sending to group..."
 
           curl -X POST https://api.line.me/v2/bot/message/push \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer $TOKEN" \
           -d "{
-            \"to\": \"$USER_ID\",
+            \"to\": \"$GROUP_ID\",
             \"messages\": [
               {
                 \"type\": \"text\",
-                \"text\": \"✅ TEST: ส่งจาก GitHub สำเร็จ!\"
+                \"text\": \"🔥 แจ้งเตือนจาก GitHub (เข้ากลุ่มสำเร็จ!)\"
               }
             ]
           }"
 
-          echo "Done"
+          echo "✅ Done"
