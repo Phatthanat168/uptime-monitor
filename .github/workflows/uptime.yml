@@ -2,8 +2,6 @@ name: LINE Test
 
 on:
   workflow_dispatch:   # กดรันเอง
-  schedule:
-    - cron: '*/5 * * * *'   # ทุก 5 นาที (เอาออกได้ถ้าไม่อยากให้ยิงบ่อย)
 
 jobs:
   test-line:
@@ -12,8 +10,13 @@ jobs:
     steps:
       - name: Send LINE Notification
         run: |
+          echo "=============================="
           echo "Sending test message to LINE..."
+          echo "Time: $(date)"
+          echo "=============================="
 
-          curl -X POST https://notify-api.line.me/api/notify \
+          curl --retry 3 --retry-delay 5 --fail -X POST https://notify-api.line.me/api/notify \
           -H "Authorization: Bearer ${{ secrets.LINE_TOKEN }}" \
           -F "message=✅ TEST: GitHub Actions ส่ง LINE สำเร็จ!"
+
+          echo "Done"
