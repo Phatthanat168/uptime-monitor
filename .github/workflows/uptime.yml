@@ -46,9 +46,10 @@ jobs:
           }
           
           # ============================================
-          # กรณี DOWN (status ไม่ใช่ 200 และไม่ใช่ 404)
+          # 🚨 DOWN (status ไม่ใช่ 200 เท่านั้น)
+          # รวม 404, 500, 502, 503, 530 ทั้งหมด
           # ============================================
-          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "404" ]; then
+          if [ "$HTTP_CODE" != "200" ]; then
             if [ "$OLD_STATUS" != "down" ]; then
               echo "🚨 SENDING DOWN ALERT..."
               send_line "🔴 WEBSITE DOWN! 🔴%0A%0AURL: $URL%0AStatus: $HTTP_CODE%0ATime: $(date '+%Y-%m-%d %H:%M:%S')%0A%0A⚠️ Please check immediately!"
@@ -58,12 +59,12 @@ jobs:
             fi
           
           # ============================================
-          # กรณี UP (status 200 หรือ 404)
+          # ✅ UP (status 200 เท่านั้น)
           # ============================================
           else
             if [ "$OLD_STATUS" = "down" ]; then
               echo "✅ SENDING RECOVERY ALERT..."
-              send_line "🟢 WEBSITE RECOVERED! 🟢%0A%0AURL: $URL%0AStatus: $HTTP_CODE%0ATime: $(date '+%Y-%m-%d %H:%M:%S')%0A%0A✅ Website is back to normal."
+              send_line "🟢 WEBSITE RECOVERED! 🟢%0A%0AURL: $URL%0AStatus: 200 OK%0ATime: $(date '+%Y-%m-%d %H:%M:%S')%0A%0A✅ Website is back to normal."
               echo "up" > status.txt
             else
               echo "✅ Website normal (status: $HTTP_CODE)"
