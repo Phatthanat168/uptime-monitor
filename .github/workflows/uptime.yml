@@ -1,4 +1,4 @@
-name: Website Monitor (LINE Group)
+name: Website Monitor (LINE Group TH)
 
 on:
   schedule:
@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Check Website + Notify LINE
         run: |
           URL="https://patrol.mggintergroup.com/"
@@ -22,10 +25,21 @@ jobs:
 
           echo "Status: $STATUS"
 
-          # 🚨 แจ้งทันทีถ้าไม่ใช่ 200
-          if [ "$STATUS" != "200" ]; then
+          # โหลดสถานะก่อนหน้า
+          if [ -f status.txt ]; then
+            PREV=$(cat status.txt)
+          else
+            PREV="unknown"
+          fi
 
-            echo "Send alert"
+          echo "Previous: $PREV"
+
+          # =========================
+          # 🚨 เว็บล่ม / error
+          # =========================
+          if [ "$STATUS" != "200" ] && [ "$PREV" != "down" ]; then
+
+            echo "DOWN detected"
 
             curl -X POST https://api.line.me/v2/bot/message/push \
             -H "Content-Type: application/json" \
@@ -35,10 +49,42 @@ jobs:
               \"messages\": [
                 {
                   \"type\": \"text\",
-                  \"text\": \"🚨 WEBSITE ERROR!\n$URL\nStatus: $STATUS\"
+                  \"text\": \"🚨 แจ้งเตือน: เว็บไซต์ล่ม / มีปัญหา\nURL: $URL\nStatus: $STATUS\"
                 }
               ]
             }"
-          else
-            echo "OK"
+
+            echo "down" > status.txt
           fi
+
+          # =========================
+          # ✅ เว็บกลับมา
+          # =========================
+          if [ "$STATUS" = "200" ] && [ "$PREV" = "down" ]; then
+
+            echo "RECOVER detected"
+
+            curl -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "{
+              \"to\": \"$GROUP_ID\",
+              \"messages\": [
+                {
+                  \"type\": \"text\",
+                  \"text\": \"✅ เว็บไซต์กลับมาใช้งานได้แล้ว\nURL: $URL\"
+                }
+              ]
+            }"
+
+            echo "up" > status.txt
+          fi
+
+      - name: Commit status
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add status.txt || true
+          git commit -m "update status" || true
+          git push || true
