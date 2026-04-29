@@ -1,57 +1,79 @@
 name: Website Monitor (LINE Group TH)
+
 on:
   workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    steps:
-      - name: Restore status cache
-        uses: actions/cache@v5
-        with:
-          path: status.txt
-          key: uptime-status
-          restore-keys: uptime-status
 
-      - name: Check Website + LINE Alert
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check Website + Notify LINE
         run: |
+          set -e
+
           URL="https://patrol.mggintergroup.com/"
           TOKEN="${{ secrets.LINE_TOKEN }}"
           GROUP_ID="Cabc85afaec5c2182c8be2175ff57f226"
 
-          echo "Checking: $URL at $(date)"
-          HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" "$URL" --max-time 10)
-          echo "Status: $HTTP_CODE"
+          echo "================================"
+          echo "CHECK START: $(date)"
+          echo "URL: $URL"
+          echo "================================"
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+
+          echo "STATUS = $STATUS"
 
           if [ -f status.txt ]; then
-            OLD_STATUS=$(cat status.txt)
+            PREV=$(cat status.txt)
           else
-            OLD_STATUS="unknown"
+            PREV="unknown"
           fi
-          echo "Previous status: $OLD_STATUS"
 
-          send_line() {
+          echo "PREV = $PREV"
+
+          if [ "$STATUS" != "200" ] && [ "$STATUS" != "404" ] && [ "$PREV" != "down" ]; then
+            echo ">>> DOWN DETECTED"
             curl -s -X POST https://api.line.me/v2/bot/message/push \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $TOKEN" \
-              -d "{\"to\":\"$GROUP_ID\",\"messages\":[{\"type\":\"text\",\"text\":\"$1\"}]}"
-          }
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            if [ "$OLD_STATUS" != "down" ]; then
-              send_line "🔴 DOWN! $URL - Status: $HTTP_CODE"
-            fi
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "{
+              \"to\": \"$GROUP_ID\",
+              \"messages\": [
+                {
+                  \"type\": \"text\",
+                  \"text\": \"🚨 WEBSITE DOWN\nURL: $URL\nSTATUS: $STATUS\nTIME: $(date)\"
+                }
+              ]
+            }"
             echo "down" > status.txt
-          else
-            if [ "$OLD_STATUS" = "down" ]; then
-              send_line "🟢 RECOVERED! $URL - Status: 200"
-            fi
+          fi
+
+          if { [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; } && { [ "$PREV" = "down" ] || [ "$PREV" = "unknown" ]; }; then
+            echo ">>> RECOVER DETECTED"
+            curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "{
+              \"to\": \"$GROUP_ID\",
+              \"messages\": [
+                {
+                  \"type\": \"text\",
+                  \"text\": \"✅ WEBSITE ONLINE\nURL: $URL\nSTATUS: $STATUS\nTIME: $(date)\"
+                }
+              ]
+            }"
             echo "up" > status.txt
           fi
 
-      - name: Save status cache
-        uses: actions/cache/save@v5
-        if: always()
-        with:
-          path: status.txt
-          key: uptime-status
+      - name: Save state
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add status.txt || true
+          git commit -m "update status" || true
+          git push || true
