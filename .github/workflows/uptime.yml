@@ -58,9 +58,9 @@ jobs:
           fi
 
           # =========================
-          # ✅ เว็บกลับมา (200 หรือ 404)
+          # ✅ เว็บกลับมา (ครั้งแรก / จาก down)
           # =========================
-          if { [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; } && [ "$PREV" = "down" ]; then
+          if { [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; } && { [ "$PREV" = "down" ] || [ "$PREV" = "unknown" ]; }; then
 
             echo "RECOVER detected"
 
@@ -72,7 +72,7 @@ jobs:
               \"messages\": [
                 {
                   \"type\": \"text\",
-                  \"text\": \"✅ เว็บไซต์กลับมาใช้งานได้แล้ว\nURL: $URL\nStatus: $STATUS\"
+                  \"text\": \"✅ เว็บไซต์พร้อมใช้งาน\nURL: $URL\nStatus: $STATUS\"
                 }
               ]
             }"
