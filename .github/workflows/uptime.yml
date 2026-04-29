@@ -2,26 +2,41 @@ name: Website Monitor
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+    - cron: '*/5 * * * *'   # ทุก 5 นาที
+  workflow_dispatch:        # กดรันเองได้
 
 jobs:
   check:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Website
+      - name: Check Website and Notify LINE
         run: |
           URL="https://patrol.mggintergroup.com/"
 
-          echo "Checking $URL"
+          echo "=============================="
+          echo "Checking: $URL"
+          echo "Time: $(date)"
+          echo "=============================="
 
+          # ยิง request และกัน error
           STATUS=$(curl -o /dev/null -s -w "%{http_code}" $URL || echo "000")
 
-          echo "Status: $STATUS"
+          echo "HTTP Status: $STATUS"
 
+          # debug เพิ่ม (optional แต่แนะนำ)
+          echo "Trying detailed connection..."
+          curl -v $URL || true
+
+          # ถ้าไม่ใช่ 200 = แจ้งเตือน
           if [ "$STATUS" != "200" ]; then
+            echo "❌ Website DOWN"
+
             curl -X POST https://notify-api.line.me/api/notify \
             -H "Authorization: Bearer ${{ secrets.LINE_TOKEN }}" \
-            -F "message=🚨 Website DOWN! Status: $STATUS"
+            -F "message=🚨 Website DOWN!
+URL: $URL
+Status: $STATUS"
+          else
+            echo "✅ Website OK"
           fi
