@@ -1,1 +1,92 @@
+name: Website Monitor (LINE Group TH)
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/10 * * * *'
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check Website + Notify LINE
+        run: |
+          set -e
+          URL="https://patrol.mggintergroup.com/"
+          TOKEN="${{ secrets.LINE_TOKEN }}"
+          GROUP_ID="Cabc85afaec5c2182c8be2175ff57f226"
+
+          echo "================================"
+          echo "เริ่มตรวจสอบ: $(date)"
+          echo "URL: $URL"
+          echo "================================"
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+          echo "สถานะ HTTP = $STATUS"
+
+          if [ -f status.txt ]; then
+            PREV=$(cat status.txt)
+          else
+            PREV="unknown"
+          fi
+          echo "สถานะก่อนหน้า = $PREV"
+
+          TIME=$(TZ='Asia/Bangkok' date '+%d/%m/%Y %H:%M:%S')
+
+          # Check if website is down (not 200 or 404)
+          if [ "$STATUS" != "200" ] && [ "$STATUS" != "404" ] && [ "$PREV" != "down" ]; then
+            echo ">>> ตรวจพบเว็บล่ม!"
+            curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -d "{
+              \"to\": \"$GROUP_ID\",
+              \"messages\": [
+                {
+                  \"type\": \"text\",
+                  \"text\": \"🚨 เว็บไซต์ล่ม!\n\nเว็บ: $URL\nสถานะ: $STATUS\nเวลา: $TIME (ไทย)\n\nกรุณาตรวจสอบด่วน!\"
+                }
+              ]
+            }"
+            echo "down" > status.txt
+            echo "ส่งแจ้งเตือนเว็บล่มแล้ว"
+          fi
+
+          # Check if website is back up (200 or 404)
+          if { [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; } && { [ "$PREV" = "down" ] || [ "$PREV" = "unknown" ]; }; then
+            if [ "$PREV" = "down" ]; then
+              echo ">>> เว็บกลับมาแล้ว!"
+              curl -s -X POST https://api.line.me/v2/bot/message/push \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $TOKEN" \
+              -d "{
+                \"to\": \"$GROUP_ID\",
+                \"messages\": [
+                  {
+                    \"type\": \"text\",
+                    \"text\": \"✅ เว็บไซต์กลับมาใช้งานได้แล้ว\n\nเว็บ: $URL\nสถานะ: $STATUS\nเวลา: $TIME (ไทย)\n\nระบบทำงานปกติแล้ว\"
+                  }
+                ]
+              }"
+              echo "ส่งแจ้งเตือนเว็บกลับมาแล้ว"
+            fi
+            echo "up" > status.txt
+          fi
+          
+          # Log current status
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; then
+            echo "เว็บไซต์正常工作 (สถานะ: $STATUS)"
+          else
+            echo "เว็บไซต์มีปัญหา (สถานะ: $STATUS)"
+          fi
+
+      - name: Save state
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add status.txt || true
+          git diff --staged --quiet || git commit -m "update status $(date '+%Y-%m-%d %H:%M:%S')"
+          git push || true
